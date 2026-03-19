@@ -56,66 +56,37 @@ async def _login() -> str:
             "Cannot re-authenticate. Please update MONARCH_TOKEN in your .env file."
         )
 
-    # Try GraphQL login mutation (no auth header needed for login)
-    login_query = """
-    mutation LoginMutation($email: String!, $password: String!, $totpToken: String, $rememberMe: Boolean) {
-      login(email: $email, password: $password, totpToken: $totpToken, rememberMe: $rememberMe) {
-        token
-        user { id email }
-        errors { field messages }
-      }
+    login_headers = {
+        "content-type": "application/json",
+        "client-platform": "web",
     }
-    """
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            GRAPHQL_URL,
-            headers={
-                "content-type": "application/json",
-                "client-platform": "web",
-                "monarch-client-version": "v1.0.1715",
-                "origin": "https://app.monarch.com",
-            },
-            json={
-                "operationName": "LoginMutation",
-                "query": login_query,
-                "variables": {"email": email, "password": password, "totpToken": _totp(), "rememberMe": True},
-            },
-            timeout=30,
-        )
+    base_body = {
+        "username": email,
+        "password": password,
+        "supports_mfa": True,
+        "trusted_device": True,
+    }
 
-        if resp.status_code == 401:
-            # Fallback: try REST login
+    async with httpx.AsyncClient() as client:
+        # Step 1: attempt login without TOTP
+        resp = await client.post(LOGIN_URL, headers=login_headers, json=base_body, timeout=30)
+
+        # Step 2: 403 = MFA required — retry with TOTP code
+        if resp.status_code == 403:
+            totp_code = _totp()
+            if not totp_code:
+                raise RuntimeError("MFA required but MONARCH_TOTP_SECRET not set.")
             resp = await client.post(
                 LOGIN_URL,
-                headers={
-                    "content-type": "application/json",
-                    "client-platform": "web",
-                    "monarch-client-version": "v1.0.1715",
-                    "origin": "https://app.monarch.com",
-                },
-                json={
-                    "username": email,
-                    "password": password,
-                    "trusted_device": True,
-                    "supports_mfa": True,
-                    "supports_email_otp": True,
-                },
+                headers=login_headers,
+                json={**base_body, "totp": totp_code},
                 timeout=30,
             )
 
         resp.raise_for_status()
         data = resp.json()
 
-    # Extract token from either response format
-    token = None
-    if "data" in data and "login" in data["data"]:
-        login_data = data["data"]["login"]
-        if login_data.get("errors"):
-            raise RuntimeError(f"Login failed: {login_data['errors']}")
-        token = login_data.get("token")
-    elif "token" in data:
-        token = data["token"]
-
+    token = data.get("token")
     if not token:
         raise RuntimeError(f"Login failed - no token in response: {data}")
 
