@@ -1,4 +1,9 @@
+import base64
+import hashlib
+import hmac
 import os
+import struct
+import time
 import httpx
 from datetime import date, timedelta
 from calendar import monthrange
@@ -27,6 +32,18 @@ def _headers() -> dict:
         "client-platform": "web",
         "origin": "https://app.monarch.com",
     }
+
+
+def _totp() -> str | None:
+    secret = os.environ.get("MONARCH_TOTP_SECRET", "")
+    if not secret:
+        return None
+    key = base64.b32decode(secret.upper())
+    msg = struct.pack(">Q", int(time.time()) // 30)
+    h = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = h[-1] & 0xF
+    code = (struct.unpack(">I", h[offset : offset + 4])[0] & 0x7FFFFFFF) % 1_000_000
+    return f"{code:06d}"
 
 
 async def _login() -> str:
@@ -61,7 +78,7 @@ async def _login() -> str:
             json={
                 "operationName": "LoginMutation",
                 "query": login_query,
-                "variables": {"email": email, "password": password, "rememberMe": True},
+                "variables": {"email": email, "password": password, "totpToken": _totp(), "rememberMe": True},
             },
             timeout=30,
         )
