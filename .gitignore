@@ -1,16 +1,11 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-
-# Secrets
 .env
-
-# Logs
+__pycache__
+*.pyc
+.venv/
 *.log
+*.egg-info/
+dist/
+build/
+.eggs/
+uv.lock
+monarchmoney.log
