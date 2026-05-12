@@ -2,7 +2,7 @@ from datetime import date
 
 from fastmcp.tools import tool
 
-from tools.client import month_range, query
+from tools.client import drop_none, month_range, query
 
 
 @tool
@@ -90,25 +90,298 @@ async def get_budgets(month: str | None = None) -> dict:
     if not month:
         month = date.today().strftime("%Y-%m")
 
-    start = f"{month}-01"
+    start, end = month_range(month)
 
     query_text = """
-    query GetBudgets($startDate: Date!) {
-      budgetData(startDate: $startDate) {
+    query Common_BudgetDataQuery($startDate: Date!, $endDate: Date!) {
+      budgetSystem
+      budgetStatus {
+        hasBudget
+        hasTransactions
+        willCreateBudgetFromEmptyDefaultCategories
+        __typename
+      }
+      budgetData(startMonth: $startDate, endMonth: $endDate) {
         monthlyAmountsByCategory {
-          category { id name icon }
-          budgetAmount { amount }
-          actualAmount
-          remainingAmount
-          monthStartDate
+          category { id name icon __typename }
+          monthlyAmounts {
+            month
+            plannedCashFlowAmount
+            plannedSetAsideAmount
+            actualAmount
+            remainingAmount
+            previousMonthRolloverAmount
+            rolloverType
+            cumulativeActualAmount
+            rolloverTargetAmount
+            __typename
+          }
+          __typename
         }
-        totalBudgetAmount { amount }
-        totalActualAmount
-        totalRemainingAmount
+        monthlyAmountsByCategoryGroup {
+          categoryGroup { id name type __typename }
+          monthlyAmounts {
+            month
+            plannedCashFlowAmount
+            plannedSetAsideAmount
+            actualAmount
+            remainingAmount
+            previousMonthRolloverAmount
+            rolloverType
+            cumulativeActualAmount
+            rolloverTargetAmount
+            __typename
+          }
+          __typename
+        }
+        monthlyAmountsForFlexExpense {
+          budgetVariability
+          monthlyAmounts {
+            month
+            plannedCashFlowAmount
+            plannedSetAsideAmount
+            actualAmount
+            remainingAmount
+            previousMonthRolloverAmount
+            rolloverType
+            cumulativeActualAmount
+            rolloverTargetAmount
+            __typename
+          }
+          __typename
+        }
+        totalsByMonth {
+          month
+          totalIncome { actualAmount plannedAmount previousMonthRolloverAmount remainingAmount __typename }
+          totalExpenses { actualAmount plannedAmount previousMonthRolloverAmount remainingAmount __typename }
+          totalFixedExpenses { actualAmount plannedAmount previousMonthRolloverAmount remainingAmount __typename }
+          totalNonMonthlyExpenses { actualAmount plannedAmount previousMonthRolloverAmount remainingAmount __typename }
+          totalFlexibleExpenses { actualAmount plannedAmount previousMonthRolloverAmount remainingAmount __typename }
+          __typename
+        }
+        __typename
       }
     }
     """
-    return await query("GetBudgets", query_text, {"startDate": start})
+    return await query("Common_BudgetDataQuery", query_text, {"startDate": start, "endDate": end})
+
+
+@tool
+async def get_budget_status() -> dict:
+    """Get whether the household has an initialized budget."""
+    query_text = """
+    query Common_GetBudgetStatus {
+      budgetStatus {
+        hasBudget
+        hasTransactions
+        willCreateBudgetFromEmptyDefaultCategories
+        __typename
+      }
+    }
+    """
+    return await query("Common_GetBudgetStatus", query_text)
+
+
+@tool
+async def get_budget_settings() -> dict:
+    """Get household budget system and apply-to-future defaults."""
+    query_text = """
+    query Common_GetBudgetSettings {
+      budgetSystem
+      budgetApplyToFutureMonthsDefault
+      flexExpenseRolloverPeriod {
+        id
+        startMonth
+        startingBalance
+        __typename
+      }
+    }
+    """
+    return await query("Common_GetBudgetSettings", query_text)
+
+
+@tool
+async def update_budget_settings(
+    budget_system: str | None = None,
+    apply_to_future_months_default: bool | None = None,
+    rollover_start_month: str | None = None,
+    rollover_starting_balance: float | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Update household budget settings.
+
+    Args:
+        budget_system: Monarch budget system value.
+        apply_to_future_months_default: Default for budget edits.
+        rollover_start_month: Optional flex rollover start month as YYYY-MM-DD.
+        rollover_starting_balance: Optional flex rollover starting balance.
+        raw_input: Extra app-native UpdateBudgetSettingsMutationInput fields.
+    """
+    input_data = drop_none(
+        {
+            "budgetSystem": budget_system,
+            "budgetApplyToFutureMonthsDefault": apply_to_future_months_default,
+            "rolloverStartMonth": rollover_start_month,
+            "rolloverStartingBalance": rollover_starting_balance,
+        }
+    )
+    if raw_input:
+        input_data.update(raw_input)
+
+    query_text = """
+    mutation Common_UpdateBudgetSettings($input: UpdateBudgetSettingsMutationInput!) {
+      updateBudgetSettings(input: $input) {
+        budgetSystem
+        budgetApplyToFutureMonthsDefault
+        budgetRolloverPeriod {
+          id
+          startMonth
+          startingBalance
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Common_UpdateBudgetSettings", query_text, {"input": input_data})
+
+
+@tool
+async def update_budget_item(
+    month: str,
+    amount: float,
+    category_id: str | None = None,
+    category_group_id: str | None = None,
+    apply_to_future: bool | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Update or create a category or category-group budget item.
+
+    Args:
+        month: Month as YYYY-MM or date as YYYY-MM-DD.
+        amount: Planned budget amount.
+        category_id: Category ID from get_categories.
+        category_group_id: Category group ID from get_categories.
+        apply_to_future: Whether Monarch should apply this amount to future months.
+        raw_input: Extra app-native UpdateOrCreateBudgetItemMutationInput fields.
+    """
+    if category_id and category_group_id:
+        raise ValueError("Only one of category_id or category_group_id can be provided")
+    start_date = month if len(month) == 10 else f"{month}-01"
+    input_data = drop_none(
+        {
+            "defaultAmount": None,
+            "startDate": start_date,
+            "timeframe": "month",
+            "amount": amount,
+            "applyToFuture": apply_to_future,
+            "categoryId": category_id,
+            "categoryGroupId": category_group_id,
+        }
+    )
+    if raw_input:
+        input_data.update(raw_input)
+
+    query_text = """
+    mutation Common_UpdateBudgetItem($input: UpdateOrCreateBudgetItemMutationInput!) {
+      updateOrCreateBudgetItem(input: $input) {
+        budgetItem {
+          id
+          plannedCashFlowAmount
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Common_UpdateBudgetItem", query_text, {"input": input_data})
+
+
+@tool
+async def update_flex_budget_item(raw_input: dict) -> dict:
+    """Update or create a flex-budget item using Monarch's app-native input.
+
+    Args:
+        raw_input: UpdateOrCreateFlexBudgetItemMutationInput.
+    """
+    query_text = """
+    mutation Common_UpdateFlexBudgetMutation($input: UpdateOrCreateFlexBudgetItemMutationInput!) {
+      updateOrCreateFlexBudgetItem(input: $input) {
+        budgetItem {
+          id
+          budgetAmount
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Common_UpdateFlexBudgetMutation", query_text, {"input": raw_input})
+
+
+@tool
+async def move_money_between_budget_categories(raw_input: dict) -> dict:
+    """Move budget money between categories using Monarch's app-native input.
+
+    Args:
+        raw_input: MoveMoneyMutationInput.
+    """
+    query_text = """
+    mutation Web_MoveMoneyMutation($input: MoveMoneyMutationInput!) {
+      moveMoneyBetweenCategories(input: $input) {
+        fromBudgetItem { id budgetAmount __typename }
+        toBudgetItem { id budgetAmount __typename }
+        __typename
+      }
+    }
+    """
+    return await query("Web_MoveMoneyMutation", query_text, {"input": raw_input})
+
+
+@tool
+async def reset_budget(raw_input: dict) -> dict:
+    """Recalculate/reset budget data using Monarch's app-native input.
+
+    Args:
+        raw_input: ResetBudgetMutationInput.
+    """
+    query_text = """
+    mutation Web_RecalculateBudgetMutation($input: ResetBudgetMutationInput!) {
+      resetBudget(input: $input) {
+        errors {
+          fieldErrors { field messages __typename }
+          message
+          code
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Web_RecalculateBudgetMutation", query_text, {"input": raw_input})
+
+
+@tool
+async def reset_budget_rollover(raw_input: dict) -> dict:
+    """Reset a budget rollover using Monarch's app-native input.
+
+    Args:
+        raw_input: ResetBudgetRolloverInput.
+    """
+    query_text = """
+    mutation Web_ResetRolloverMutation($input: ResetBudgetRolloverInput!) {
+      resetBudgetRollover(input: $input) {
+        errors {
+          fieldErrors { field messages __typename }
+          message
+          code
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Web_ResetRolloverMutation", query_text, {"input": raw_input})
 
 
 @tool

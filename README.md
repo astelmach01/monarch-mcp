@@ -10,10 +10,13 @@ An MCP (Model Context Protocol) server that connects AI assistants to [Monarch M
 - **Transaction Splits**: Inspect, split, and unsplit transactions
 - **Tags**: List, search, create, update, delete, and reorder transaction tags
 - **Categories**: Create, update, preview delete impact, and delete/move categories
+- **Category Groups**: Create, update, delete, inspect, and reorder category groups/categories
 - **Merchants**: Search, inspect, rename, and merge/delete merchants
-- **Rules**: List, preview, create, update, and delete transaction rules
+- **Rules**: List, preview, create, update, reorder, and delete transaction rules
+- **Attachments**: Upload, inspect, and delete transaction attachments
 - **Cash Flow**: Monthly income/expense breakdown with savings rate
-- **Budgets**: Budget tracking with actual vs planned spending
+- **Budgets**: Budget tracking plus budget item/settings/rollover edits
+- **Goals**: List, create, update, delete, prioritize, link transactions, and manage goal events
 - **Recurring**: Track bills and recurring transactions, list streams, rescan, and manage streams
 - **Net Worth**: Historical net worth snapshots
 - **Investments**: Portfolio holdings and performance
@@ -63,6 +66,7 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `get_account_balances_summary` | Quick net worth overview |
 | `get_transactions` | Search/filter transactions |
 | `get_transaction` | Details for one transaction |
+| `explain_transaction` | Monarch's explanation for one transaction |
 | `get_transaction_split_details` | Split-editor detail for one transaction |
 | `split_transaction` | Create or update split rows |
 | `unsplit_transaction` | Remove all split rows |
@@ -71,7 +75,16 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `create_transaction` | Create a manual transaction |
 | `set_transaction_tags` | Replace tags on one transaction |
 | `delete_transaction` | Delete one transaction |
+| `bulk_delete_transactions` | Delete a set of transactions |
 | `bulk_update_transactions` | Update a set of transactions |
+| `start_transactions_download` | Start a CSV transaction export |
+| `get_transactions_download_session` | Check a transaction export session |
+| `move_transactions` | Move transactions using Monarch's app-native input |
+| `get_transaction_attachment_upload_info` | Get signed upload fields for an attachment |
+| `upload_transaction_attachment` | Upload and attach a local file |
+| `add_transaction_attachment_metadata` | Attach an already-uploaded asset |
+| `get_transaction_attachment` | Get attachment detail/download URL |
+| `delete_transaction_attachment` | Delete a transaction attachment |
 | `get_transaction_tags` | List transaction tags |
 | `search_transaction_tags` | Search transaction tags by name |
 | `create_transaction_tag` | Create a transaction tag |
@@ -79,6 +92,13 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `delete_transaction_tag` | Delete a transaction tag |
 | `update_transaction_tag_order` | Reorder transaction tags |
 | `get_category_deletion_info` | Preview category delete/move impact |
+| `get_category_groups` | List category groups |
+| `get_category_group` | Inspect one category group |
+| `create_category_group` | Create a category group |
+| `update_category_group` | Update a category group |
+| `delete_category_group` | Delete/move a category group |
+| `update_category_group_order` | Reorder a category group |
+| `update_category_order` | Reorder a category within a group |
 | `create_category` | Create a transaction category |
 | `update_category` | Update a transaction category |
 | `delete_category` | Delete/disable a category and move relations |
@@ -91,8 +111,40 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `create_transaction_rule` | Create a transaction rule |
 | `update_transaction_rule` | Update a transaction rule |
 | `delete_transaction_rule` | Delete a transaction rule |
+| `update_transaction_rule_order` | Reorder a transaction rule |
+| `delete_all_transaction_rules` | Delete all transaction rules |
 | `get_cash_flow` | Monthly income/expense breakdown |
 | `get_budgets` | Budget vs actual spending |
+| `get_budget_status` | Budget initialization status |
+| `get_budget_settings` | Household budget settings |
+| `update_budget_settings` | Update household budget settings |
+| `update_budget_item` | Update/create category or group budget amount |
+| `update_flex_budget_item` | Update/create flex budget amount |
+| `move_money_between_budget_categories` | Move budget money between categories |
+| `reset_budget` | Recalculate/reset budget data |
+| `reset_budget_rollover` | Reset a budget rollover |
+| `list_goals` | List legacy/goals-v2 goals |
+| `list_savings_goals` | List savings goals |
+| `get_goal_detail` | Get one goals-v2 goal |
+| `get_savings_goal` | Get one savings goal |
+| `get_goal_options` | Get built-in goal creation options |
+| `create_savings_goals` | Create savings goals |
+| `update_goal` | Update a goal |
+| `delete_goal` | Delete a goals-v2 goal |
+| `delete_savings_goal` | Delete a savings goal |
+| `archive_savings_goal` | Archive a savings goal |
+| `unarchive_savings_goal` | Unarchive a savings goal |
+| `mark_goal_complete` | Mark a goal complete |
+| `mark_goal_incomplete` | Mark a goal incomplete |
+| `link_transaction_to_goal` | Link or unlink a transaction to a goal |
+| `spend_from_goal` | Spend from a goal |
+| `contribute_to_savings_goal` | Add a savings-goal contribution |
+| `withdraw_from_savings_goal` | Add a savings-goal withdrawal |
+| `update_savings_goal_event` | Update a savings-goal event |
+| `delete_savings_goal_event` | Delete a savings-goal event |
+| `update_goal_priorities` | Reorder/prioritize goals |
+| `set_goal_planned_contribution` | Set planned monthly goal contribution |
+| `set_savings_goal_budget_amount` | Set savings-goal budget amount |
 | `get_recurring` | Bills and recurring charges |
 | `get_recurring_streams` | List recurring streams |
 | `create_recurring_stream` | Create a recurring stream |
@@ -111,11 +163,13 @@ with FastMCP's filesystem provider:
 
 - `tools/accounts.py`: account and balance tools
 - `tools/transactions.py`: transaction read, create, update, tag, bulk update, and delete tools
-- `tools/categories.py`: category create, update, delete, and delete-preview tools
+- `tools/attachments.py`: transaction attachment upload/read/delete tools
+- `tools/categories.py`: category and category-group create, update, delete, reorder, and delete-preview tools
 - `tools/merchants.py`: merchant search, edit, and merge/delete tools
 - `tools/recurring.py`: recurring stream list/create/delete/scan tools
 - `tools/rules.py`: transaction rule list, preview, create, update, and delete tools
 - `tools/tags.py`: transaction tag list, search, create, update, delete, and order tools
+- `tools/goals.py`: goal/savings-goal read/write/event tools
 - `tools/planning.py`: cash flow, budget, recurring, net worth, and investment tools
 - `tools/auth.py`: login tool
 - `tools/client.py`: shared Monarch GraphQL/auth helpers

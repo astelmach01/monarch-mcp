@@ -183,3 +183,36 @@ async def delete_transaction_rule(rule_id: str) -> dict:
     }
     """
     return await query("Common_DeleteTransactionRule", query_text, {"id": rule_id})
+
+
+@tool
+async def update_transaction_rule_order(rule_id: str, order: int) -> dict:
+    """Move a transaction rule to a new order position.
+
+    Args:
+        rule_id: Rule ID from get_transaction_rules.
+        order: New integer order.
+    """
+    query_text = """
+    mutation Web_UpdateRuleOrderMutation($id: ID!, $order: Int!) {
+      updateTransactionRuleOrderV2(id: $id, order: $order) {
+        transactionRules { id order __typename }
+        __typename
+      }
+    }
+    """
+    return await query("Web_UpdateRuleOrderMutation", query_text, {"id": rule_id, "order": order})
+
+
+@tool
+async def delete_all_transaction_rules() -> dict:
+    """Delete all transaction rules. This is destructive."""
+    query_text = """
+    mutation Web_DeleteAllTransactionRulesMutation {
+      deleteAllTransactionRules {
+        deleted
+        __typename
+      }
+    }
+    """
+    return await query("Web_DeleteAllTransactionRulesMutation", query_text)

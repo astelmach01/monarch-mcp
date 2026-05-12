@@ -129,6 +129,24 @@ async def get_transaction(transaction_id: str) -> dict:
 
 
 @tool
+async def explain_transaction(transaction_id: str) -> dict:
+    """Ask Monarch for its AI/category explanation for one transaction.
+
+    Args:
+        transaction_id: Transaction UUID from get_transactions.
+    """
+    query_text = """
+    query Common_TransactionExplainQuery($id: UUID!) {
+      explainTransaction(id: $id) {
+        explanation
+        __typename
+      }
+    }
+    """
+    return await query("Common_TransactionExplainQuery", query_text, {"id": transaction_id})
+
+
+@tool
 async def get_transaction_split_details(transaction_id: str) -> dict:
     """Get the fields Monarch's split editor uses for one transaction.
 
@@ -438,6 +456,123 @@ async def delete_transaction(transaction_id: str) -> dict:
     }
     """
     return await query("Common_DeleteTransactionMutation", query_text, {"input": {"transactionId": transaction_id}})
+
+
+@tool
+async def bulk_delete_transactions(
+    transaction_ids: list[str],
+    excluded_transaction_ids: list[str] | None = None,
+    all_selected: bool = False,
+    expected_affected_transaction_count: int | None = None,
+    filters: dict | None = None,
+) -> dict:
+    """Bulk-delete selected transactions. This is destructive.
+
+    Args:
+        transaction_ids: Transaction UUIDs to delete when all_selected is false.
+        excluded_transaction_ids: Excluded UUIDs when all_selected is true.
+        all_selected: Whether the filter result set is selected.
+        expected_affected_transaction_count: Expected affected count. Defaults to
+            len(transaction_ids).
+        filters: App-native TransactionFilterInput for all-selected deletes.
+    """
+    query_text = """
+    mutation Common_BulkDeleteTransactionsMutation(
+      $selectedTransactionIds: [ID!]
+      $excludedTransactionIds: [ID!]
+      $allSelected: Boolean!
+      $expectedAffectedTransactionCount: Int!
+      $filters: TransactionFilterInput
+    ) {
+      bulkDeleteTransactions(
+        input: {
+          selectedTransactionIds: $selectedTransactionIds
+          excludedTransactionIds: $excludedTransactionIds
+          isAllSelected: $allSelected
+          expectedAffectedTransactionCount: $expectedAffectedTransactionCount
+          filters: $filters
+        }
+      ) {
+        success
+        affectedCount
+        errors { message __typename }
+        __typename
+      }
+    }
+    """
+    return await query(
+        "Common_BulkDeleteTransactionsMutation",
+        query_text,
+        {
+            "selectedTransactionIds": transaction_ids,
+            "excludedTransactionIds": excluded_transaction_ids or [],
+            "allSelected": all_selected,
+            "expectedAffectedTransactionCount": expected_affected_transaction_count
+            if expected_affected_transaction_count is not None
+            else len(transaction_ids),
+            "filters": filters or {},
+        },
+    )
+
+
+@tool
+async def start_transactions_download(filters: dict, order_by: str | None = "date") -> dict:
+    """Start a Monarch CSV transaction export session.
+
+    Args:
+        filters: App-native TransactionFilterInput.
+        order_by: Optional orderBy value.
+    """
+    query_text = """
+    mutation Web_DownloadTransactions($filters: TransactionFilterInput!, $orderBy: String) {
+      startDownloadTransactionsSession(filters: $filters, orderBy: $orderBy) {
+        sessionKey
+        status
+        __typename
+      }
+    }
+    """
+    return await query("Web_DownloadTransactions", query_text, {"filters": filters, "orderBy": order_by})
+
+
+@tool
+async def get_transactions_download_session(session_key: str) -> dict:
+    """Check a Monarch transaction export session.
+
+    Args:
+        session_key: Session key from start_transactions_download.
+    """
+    query_text = """
+    query Web_GetDownloadTransactionsSession($sessionKey: String!) {
+      downloadTransactionsSession(sessionKey: $sessionKey) {
+        sessionKey
+        status
+        errorMessage
+        url
+        __typename
+      }
+    }
+    """
+    return await query("Web_GetDownloadTransactionsSession", query_text, {"sessionKey": session_key})
+
+
+@tool
+async def move_transactions(raw_input: dict) -> dict:
+    """Move transactions using Monarch's app-native input.
+
+    Args:
+        raw_input: MoveTransactionsInput.
+    """
+    query_text = """
+    mutation Web_MoveTransactions($input: MoveTransactionsInput!) {
+      moveTransactions(input: $input) {
+        numTransactionsMoved
+        errors { message __typename }
+        __typename
+      }
+    }
+    """
+    return await query("Web_MoveTransactions", query_text, {"input": raw_input})
 
 
 @tool
