@@ -72,6 +72,17 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `get_account_history` | Balance history for one account |
 | `login` | Authenticate and save credentials |
 
+## Code Layout
+
+`server.py` only configures the FastMCP server. Tools are loaded from `tools/`
+with FastMCP's filesystem provider:
+
+- `tools/accounts.py`: account and balance tools
+- `tools/transactions.py`: transaction read, create, update, tag, bulk update, and delete tools
+- `tools/planning.py`: cash flow, budget, recurring, net worth, and investment tools
+- `tools/auth.py`: login tool
+- `tools/client.py`: shared Monarch GraphQL/auth helpers
+
 ## Auto-Authentication
 
 If your token expires, the server automatically re-authenticates using `MONARCH_EMAIL` and `MONARCH_PASSWORD` from your `.env`. For accounts with MFA, set `MONARCH_TOTP_SECRET` to your TOTP seed.
