@@ -129,6 +129,121 @@ async def get_transaction(transaction_id: str) -> dict:
 
 
 @tool
+async def get_transaction_split_details(transaction_id: str) -> dict:
+    """Get the fields Monarch's split editor uses for one transaction.
+
+    Args:
+        transaction_id: Transaction UUID from get_transactions.
+    """
+    query_text = """
+    query Common_TransactionSplitQuery($id: UUID!) {
+      getTransaction(id: $id) {
+        id
+        amount
+        reviewedAt
+        needsReview
+        reviewStatus
+        hideFromReports
+        dataProviderDescription
+        notes
+        category { id name icon group { type __typename } __typename }
+        merchant { id name logoUrl __typename }
+        needsReviewByUser { id name __typename }
+        tags { id name color __typename }
+        savingsGoalEvent { id goal { id __typename } account { id __typename } __typename }
+        ownedByUser { id displayName profilePictureUrl __typename }
+        businessEntity { id name logoUrl color __typename }
+        splitTransactions {
+          id
+          amount
+          notes
+          date
+          hideFromReports
+          reviewStatus
+          needsReview
+          merchant { id name logoUrl __typename }
+          category { id icon name __typename }
+          goal { id name imageStorageProvider imageStorageProviderId __typename }
+          savingsGoalEvent { id goal { id __typename } account { id __typename } __typename }
+          needsReviewByUser { id name __typename }
+          tags { id name color __typename }
+          ownedByUser { id displayName profilePictureUrl __typename }
+          businessEntity { id name logoUrl color __typename }
+          businessEntityOverriddenAt
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query("Common_TransactionSplitQuery", query_text, {"id": transaction_id})
+
+
+@tool
+async def split_transaction(transaction_id: str, split_data: list[dict]) -> dict:
+    """Create, update, or clear transaction splits.
+
+    Args:
+        transaction_id: Transaction UUID from get_transactions.
+        split_data: List of Monarch split objects. Each split may include amount,
+            categoryId, merchantName, notes, hideFromReports, reviewStatus, tags,
+            needsReview, needsReviewByUserId, ownerUserId, businessEntityId, or id
+            for existing split rows. Amounts must add up to the original
+            transaction amount. Pass an empty list to remove all splits.
+    """
+    query_text = """
+    mutation Common_SplitTransactionMutation($input: UpdateTransactionSplitMutationInput!) {
+      updateTransactionSplit(input: $input) {
+        errors {
+          fieldErrors { field messages __typename }
+          message
+          code
+          __typename
+        }
+        transaction {
+          id
+          hasSplitTransactions
+          splitTransactions {
+            id
+            amount
+            notes
+            hideFromReports
+            reviewStatus
+            merchant { id name __typename }
+            category { id icon name __typename }
+            goal { id __typename }
+            savingsGoalEvent { id goal { id __typename } account { id __typename } __typename }
+            needsReviewByUser { id __typename }
+            tags { id __typename }
+            ownedByUser { id __typename }
+            businessEntity { id name logoUrl color __typename }
+            businessEntityOverriddenAt
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+    }
+    """
+    return await query(
+        "Common_SplitTransactionMutation",
+        query_text,
+        {"input": {"transactionId": transaction_id, "splitData": split_data}},
+    )
+
+
+@tool
+async def unsplit_transaction(transaction_id: str) -> dict:
+    """Remove all splits from a transaction.
+
+    Args:
+        transaction_id: Transaction UUID from get_transactions.
+    """
+    return await split_transaction(transaction_id, [])
+
+
+@tool
 async def update_transaction(
     transaction_id: str,
     category_id: str | None = None,
