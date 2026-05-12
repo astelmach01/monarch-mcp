@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import httpx
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import query
 
@@ -18,7 +18,7 @@ def _attachment_fields() -> str:
     """
 
 
-@tool
+@read_tool()
 async def get_transaction_attachment_upload_info(transaction_id: str) -> dict:
     """Get Monarch's signed upload parameters for a transaction attachment.
 
@@ -48,7 +48,7 @@ async def get_transaction_attachment_upload_info(transaction_id: str) -> dict:
     )
 
 
-@tool
+@read_tool()
 async def get_transaction_attachment(attachment_id: str) -> dict:
     """Get a transaction attachment's download URL.
 
@@ -67,7 +67,7 @@ async def get_transaction_attachment(attachment_id: str) -> dict:
     return await query("Mobile_GetAttachmentDetails", query_text, {"attachmentId": attachment_id})
 
 
-@tool
+@write_tool()
 async def add_transaction_attachment_metadata(
     transaction_id: str,
     filename: str,
@@ -108,7 +108,7 @@ async def add_transaction_attachment_metadata(
     )
 
 
-@tool
+@write_tool(timeout=120)
 async def upload_transaction_attachment(
     transaction_id: str,
     file_path: str,
@@ -168,7 +168,7 @@ async def upload_transaction_attachment(
     return result
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_transaction_attachment(attachment_id: str) -> dict:
     """Delete a transaction attachment.
 

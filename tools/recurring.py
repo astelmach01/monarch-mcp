@@ -1,9 +1,9 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import query
 
 
-@tool
+@read_tool()
 async def get_recurring_streams(include_liabilities: bool | None = None) -> dict:
     """List recurring streams, including pending review streams.
 
@@ -41,7 +41,7 @@ async def get_recurring_streams(include_liabilities: bool | None = None) -> dict
     return await query("Common_GetRecurringStreams", query_text, {"includeLiabilities": include_liabilities})
 
 
-@tool
+@write_tool()
 async def create_recurring_stream(merchant_id: str, amount: float, base_date: str, frequency: str) -> dict:
     """Create a recurring transaction stream for a merchant.
 
@@ -83,7 +83,7 @@ async def create_recurring_stream(merchant_id: str, amount: float, base_date: st
     )
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_recurring_stream(stream_id: str) -> dict:
     """Delete a recurring transaction stream.
 
@@ -101,7 +101,7 @@ async def delete_recurring_stream(stream_id: str) -> dict:
     return await query("DeleteRecurringTransactionStreamMutation", query_text, {"id": stream_id})
 
 
-@tool
+@write_tool(idempotent=True)
 async def mark_stream_not_recurring(stream_id: str) -> dict:
     """Mark a stream as not recurring.
 
@@ -125,7 +125,7 @@ async def mark_stream_not_recurring(stream_id: str) -> dict:
     return await query("Common_MarkAsNotRecurring", query_text, {"streamId": stream_id})
 
 
-@tool
+@write_tool()
 async def trigger_recurring_merchant_search() -> dict:
     """Ask Monarch to rescan transactions for recurring merchants."""
     query_text = """

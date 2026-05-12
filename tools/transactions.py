@@ -1,11 +1,11 @@
 from datetime import date, timedelta
 
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, query, transaction_mutation_fields
 
 
-@tool
+@read_tool()
 async def get_transactions(
     start_date: str | None = None,
     end_date: str | None = None,
@@ -87,7 +87,7 @@ async def get_transactions(
     )
 
 
-@tool
+@read_tool()
 async def get_transaction(transaction_id: str) -> dict:
     """Get full details for a single transaction.
 
@@ -128,7 +128,7 @@ async def get_transaction(transaction_id: str) -> dict:
     return await query("Common_TransactionDetailQuery", query_text, {"id": transaction_id})
 
 
-@tool
+@read_tool()
 async def explain_transaction(transaction_id: str) -> dict:
     """Ask Monarch for its AI/category explanation for one transaction.
 
@@ -146,7 +146,7 @@ async def explain_transaction(transaction_id: str) -> dict:
     return await query("Common_TransactionExplainQuery", query_text, {"id": transaction_id})
 
 
-@tool
+@read_tool()
 async def get_transaction_split_details(transaction_id: str) -> dict:
     """Get the fields Monarch's split editor uses for one transaction.
 
@@ -197,7 +197,7 @@ async def get_transaction_split_details(transaction_id: str) -> dict:
     return await query("Common_TransactionSplitQuery", query_text, {"id": transaction_id})
 
 
-@tool
+@write_tool(idempotent=True)
 async def split_transaction(transaction_id: str, split_data: list[dict]) -> dict:
     """Create, update, or clear transaction splits.
 
@@ -251,7 +251,7 @@ async def split_transaction(transaction_id: str, split_data: list[dict]) -> dict
     )
 
 
-@tool
+@write_tool(idempotent=True)
 async def unsplit_transaction(transaction_id: str) -> dict:
     """Remove all splits from a transaction.
 
@@ -261,7 +261,7 @@ async def unsplit_transaction(transaction_id: str) -> dict:
     return await split_transaction(transaction_id, [])
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_transaction(
     transaction_id: str,
     category_id: str | None = None,
@@ -320,7 +320,7 @@ async def update_transaction(
     return result
 
 
-@tool
+@write_tool(idempotent=True)
 async def mark_transaction_reviewed(transaction_id: str, reviewed: bool = True) -> dict:
     """Mark a transaction reviewed or back to needs-review.
 
@@ -334,7 +334,7 @@ async def mark_transaction_reviewed(transaction_id: str, reviewed: bool = True) 
     )
 
 
-@tool
+@write_tool()
 async def create_transaction(
     account_id: str,
     amount: float,
@@ -401,7 +401,7 @@ async def create_transaction(
     return result
 
 
-@tool
+@write_tool(idempotent=True)
 async def set_transaction_tags(transaction_id: str, tag_ids: list[str]) -> dict:
     """Replace a transaction's tags.
 
@@ -434,7 +434,7 @@ async def set_transaction_tags(transaction_id: str, tag_ids: list[str]) -> dict:
     )
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_transaction(transaction_id: str) -> dict:
     """Delete one transaction.
 
@@ -458,7 +458,7 @@ async def delete_transaction(transaction_id: str) -> dict:
     return await query("Common_DeleteTransactionMutation", query_text, {"input": {"transactionId": transaction_id}})
 
 
-@tool
+@write_tool(destructive=True)
 async def bulk_delete_transactions(
     transaction_ids: list[str],
     excluded_transaction_ids: list[str] | None = None,
@@ -515,7 +515,7 @@ async def bulk_delete_transactions(
     )
 
 
-@tool
+@write_tool()
 async def start_transactions_download(filters: dict, order_by: str | None = "date") -> dict:
     """Start a Monarch CSV transaction export session.
 
@@ -535,7 +535,7 @@ async def start_transactions_download(filters: dict, order_by: str | None = "dat
     return await query("Web_DownloadTransactions", query_text, {"filters": filters, "orderBy": order_by})
 
 
-@tool
+@read_tool()
 async def get_transactions_download_session(session_key: str) -> dict:
     """Check a Monarch transaction export session.
 
@@ -556,7 +556,7 @@ async def get_transactions_download_session(session_key: str) -> dict:
     return await query("Web_GetDownloadTransactionsSession", query_text, {"sessionKey": session_key})
 
 
-@tool
+@write_tool()
 async def move_transactions(raw_input: dict) -> dict:
     """Move transactions using Monarch's app-native input.
 
@@ -575,7 +575,7 @@ async def move_transactions(raw_input: dict) -> dict:
     return await query("Web_MoveTransactions", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool(idempotent=True)
 async def bulk_update_transactions(
     transaction_ids: list[str],
     updates: dict | None = None,

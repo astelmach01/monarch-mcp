@@ -1,11 +1,11 @@
 from datetime import date
 
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, month_range, query
 
 
-@tool
+@read_tool()
 async def get_cash_flow(month: str | None = None) -> dict:
     """Get monthly cash flow summary with income and expenses by category.
 
@@ -80,7 +80,7 @@ async def get_cash_flow(month: str | None = None) -> dict:
     }
 
 
-@tool
+@read_tool()
 async def get_budgets(month: str | None = None) -> dict:
     """Get budget status for a given month.
 
@@ -166,7 +166,7 @@ async def get_budgets(month: str | None = None) -> dict:
     return await query("Common_BudgetDataQuery", query_text, {"startDate": start, "endDate": end})
 
 
-@tool
+@read_tool()
 async def get_budget_status() -> dict:
     """Get whether the household has an initialized budget."""
     query_text = """
@@ -182,7 +182,7 @@ async def get_budget_status() -> dict:
     return await query("Common_GetBudgetStatus", query_text)
 
 
-@tool
+@read_tool()
 async def get_budget_settings() -> dict:
     """Get household budget system and apply-to-future defaults."""
     query_text = """
@@ -200,7 +200,7 @@ async def get_budget_settings() -> dict:
     return await query("Common_GetBudgetSettings", query_text)
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_budget_settings(
     budget_system: str | None = None,
     apply_to_future_months_default: bool | None = None,
@@ -246,7 +246,7 @@ async def update_budget_settings(
     return await query("Common_UpdateBudgetSettings", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_budget_item(
     month: str,
     amount: float,
@@ -297,7 +297,7 @@ async def update_budget_item(
     return await query("Common_UpdateBudgetItem", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_flex_budget_item(raw_input: dict) -> dict:
     """Update or create a flex-budget item using Monarch's app-native input.
 
@@ -319,7 +319,7 @@ async def update_flex_budget_item(raw_input: dict) -> dict:
     return await query("Common_UpdateFlexBudgetMutation", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool()
 async def move_money_between_budget_categories(raw_input: dict) -> dict:
     """Move budget money between categories using Monarch's app-native input.
 
@@ -338,7 +338,7 @@ async def move_money_between_budget_categories(raw_input: dict) -> dict:
     return await query("Web_MoveMoneyMutation", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool(destructive=True)
 async def reset_budget(raw_input: dict) -> dict:
     """Recalculate/reset budget data using Monarch's app-native input.
 
@@ -361,7 +361,7 @@ async def reset_budget(raw_input: dict) -> dict:
     return await query("Web_RecalculateBudgetMutation", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool(destructive=True)
 async def reset_budget_rollover(raw_input: dict) -> dict:
     """Reset a budget rollover using Monarch's app-native input.
 
@@ -384,7 +384,7 @@ async def reset_budget_rollover(raw_input: dict) -> dict:
     return await query("Web_ResetRolloverMutation", query_text, {"input": raw_input})
 
 
-@tool
+@read_tool()
 async def get_categories() -> dict:
     """Get all transaction categories and their groups."""
     query_text = """
@@ -399,7 +399,7 @@ async def get_categories() -> dict:
     return await query("GetCategories", query_text)
 
 
-@tool
+@read_tool()
 async def get_recurring(month: str | None = None) -> dict:
     """Get recurring transactions/bills for a given month.
 
@@ -455,7 +455,7 @@ async def get_recurring(month: str | None = None) -> dict:
     )
 
 
-@tool
+@read_tool()
 async def get_net_worth_snapshots(timeframe: str = "1M") -> dict:
     """Get historical net worth data points.
 
@@ -473,7 +473,7 @@ async def get_net_worth_snapshots(timeframe: str = "1M") -> dict:
     return await query("GetNetWorthSnapshots", query_text, {"timeframe": timeframe})
 
 
-@tool
+@read_tool()
 async def get_investments() -> dict:
     """Get investment holdings and performance."""
     query_text = """

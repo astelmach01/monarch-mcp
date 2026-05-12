@@ -1,9 +1,9 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool
 
 from tools.client import query
 
 
-@tool
+@read_tool()
 async def get_accounts() -> dict:
     """Get all financial accounts with balances, types, and connection status."""
     query_text = """
@@ -25,7 +25,7 @@ async def get_accounts() -> dict:
     return await query("GetAccounts", query_text, {"filters": {}})
 
 
-@tool
+@read_tool()
 async def get_account_balances_summary() -> dict:
     """Get a quick summary of total assets, liabilities, and net worth."""
     data = await get_accounts()
@@ -51,7 +51,7 @@ async def get_account_balances_summary() -> dict:
     }
 
 
-@tool
+@read_tool()
 async def get_account_history(account_id: str) -> dict:
     """Get balance history snapshots for a specific account.
 

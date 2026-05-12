@@ -1,4 +1,4 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, query
 
@@ -112,7 +112,7 @@ def _savings_goal_fields() -> str:
     """
 
 
-@tool
+@read_tool()
 async def list_goals() -> dict:
     """List Monarch goals and accounts with unallocated goal balances."""
     query_text = f"""
@@ -128,7 +128,7 @@ async def list_goals() -> dict:
     return await query("Web_GoalsV2", query_text)
 
 
-@tool
+@read_tool()
 async def list_savings_goals() -> dict:
     """List Monarch's current savings goals experience goals."""
     query_text = f"""
@@ -141,7 +141,7 @@ async def list_savings_goals() -> dict:
     return await query("Common_SavingsGoals", query_text)
 
 
-@tool
+@read_tool()
 async def get_savings_goal(goal_id: str) -> dict:
     """Get one savings goal.
 
@@ -158,7 +158,7 @@ async def get_savings_goal(goal_id: str) -> dict:
     return await query("Common_SavingsGoal", query_text, {"id": goal_id})
 
 
-@tool
+@read_tool()
 async def get_goal_detail(goal_id: str) -> dict:
     """Get detail for one Monarch goal.
 
@@ -175,7 +175,7 @@ async def get_goal_detail(goal_id: str) -> dict:
     return await query("Web_GoalDetailV2", query_text, {"goalId": goal_id})
 
 
-@tool
+@read_tool()
 async def get_goal_options() -> dict:
     """Get Monarch's built-in goal creation options."""
     query_text = """
@@ -194,7 +194,7 @@ async def get_goal_options() -> dict:
     return await query("Common_GoalOptions", query_text)
 
 
-@tool
+@write_tool()
 async def create_savings_goals(goals: list[dict]) -> dict:
     """Create one or more savings goals using Monarch's app-native goal objects.
 
@@ -217,7 +217,7 @@ async def create_savings_goals(goals: list[dict]) -> dict:
     return await query("Common_CreateSavingsGoals", query_text, {"input": {"goals": goals}})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_goal(
     goal_id: str,
     name: str | None = None,
@@ -271,7 +271,7 @@ async def update_goal(
     return await query("Mobile_UpdateGoalV2", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_goal(goal_id: str, raw_input: dict | None = None) -> dict:
     """Delete a Monarch goal.
 
@@ -295,7 +295,7 @@ async def delete_goal(goal_id: str, raw_input: dict | None = None) -> dict:
     return await query("Common_DeleteGoalV2", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_savings_goal(goal_id: str, raw_input: dict | None = None) -> dict:
     """Delete a savings goal.
 
@@ -318,7 +318,7 @@ async def delete_savings_goal(goal_id: str, raw_input: dict | None = None) -> di
     return await query("Common_DeleteSavingsGoal", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def archive_savings_goal(goal_id: str, raw_input: dict | None = None) -> dict:
     """Archive a savings goal.
 
@@ -341,7 +341,7 @@ async def archive_savings_goal(goal_id: str, raw_input: dict | None = None) -> d
     return await query("Common_ArchiveSavingsGoal", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def unarchive_savings_goal(goal_id: str, raw_input: dict | None = None) -> dict:
     """Unarchive a savings goal.
 
@@ -364,7 +364,7 @@ async def unarchive_savings_goal(goal_id: str, raw_input: dict | None = None) ->
     return await query("Common_UnarchiveSavingsGoal", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def mark_goal_complete(goal_id: str, raw_input: dict | None = None) -> dict:
     """Mark a Monarch goal complete.
 
@@ -392,7 +392,7 @@ async def mark_goal_complete(goal_id: str, raw_input: dict | None = None) -> dic
     return await query("Common_MarkGoalComplete", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def mark_goal_incomplete(goal_id: str, raw_input: dict | None = None) -> dict:
     """Mark a completed Monarch goal incomplete.
 
@@ -420,7 +420,7 @@ async def mark_goal_incomplete(goal_id: str, raw_input: dict | None = None) -> d
     return await query("Common_MarkGoalIncomplete", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def link_transaction_to_goal(
     transaction_id: str,
     goal_id: str | None = None,
@@ -469,7 +469,7 @@ async def link_transaction_to_goal(
     return await query("Common_LinkTransactionToGoal", query_text, {"input": input_data})
 
 
-@tool
+@write_tool()
 async def spend_from_goal(
     transaction_id: str,
     goal_id: str | None = None,
@@ -506,7 +506,7 @@ async def spend_from_goal(
     return await query("Common_SpendFromGoal", query_text, {"input": input_data})
 
 
-@tool
+@write_tool()
 async def contribute_to_savings_goal(raw_input: dict) -> dict:
     """Create a savings-goal contribution using Monarch's app-native input.
 
@@ -530,7 +530,7 @@ async def contribute_to_savings_goal(raw_input: dict) -> dict:
     return await query("Common_ContributeToSavingsGoal", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool()
 async def withdraw_from_savings_goal(raw_input: dict) -> dict:
     """Create a savings-goal withdrawal using Monarch's app-native input.
 
@@ -553,7 +553,7 @@ async def withdraw_from_savings_goal(raw_input: dict) -> dict:
     return await query("Common_WithdrawFromSavingsGoal", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_savings_goal_event(raw_input: dict) -> dict:
     """Update a savings-goal event using Monarch's app-native input.
 
@@ -580,7 +580,7 @@ async def update_savings_goal_event(raw_input: dict) -> dict:
     return await query("Common_UpdateSavingsGoalEvent", query_text, {"input": raw_input})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_savings_goal_event(raw_input: dict) -> dict:
     """Delete a savings-goal event using Monarch's app-native input.
 
@@ -598,8 +598,11 @@ async def delete_savings_goal_event(raw_input: dict) -> dict:
     return await query("Common_DeleteSavingsGoalEvent", query_text, {"input": raw_input})
 
 
-@tool
-async def update_goal_priorities(goals: list[dict] | None = None, raw_input: dict | None = None) -> dict:
+@write_tool(idempotent=True)
+async def update_goal_priorities(
+    goals: list[dict] | None = None,
+    raw_input: dict | None = None,
+) -> dict:
     """Update goal priorities.
 
     Args:
@@ -628,7 +631,7 @@ async def update_goal_priorities(goals: list[dict] | None = None, raw_input: dic
     return await query("Mobile_UpdateGoalsPriorities", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def set_goal_planned_contribution(
     goal_id: str,
     amount: float,
@@ -670,7 +673,7 @@ async def set_goal_planned_contribution(
     )
 
 
-@tool
+@write_tool(idempotent=True)
 async def set_savings_goal_budget_amount(raw_input: dict) -> dict:
     """Set a savings-goal budget amount using Monarch's app-native input.
 

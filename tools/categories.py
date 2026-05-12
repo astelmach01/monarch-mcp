@@ -1,4 +1,4 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, query
 
@@ -60,7 +60,7 @@ def _payload_errors() -> str:
     """
 
 
-@tool
+@read_tool()
 async def get_category_deletion_info(category_id: str) -> dict:
     """Preview what deleting/disabling a category would affect.
 
@@ -80,7 +80,7 @@ async def get_category_deletion_info(category_id: str) -> dict:
     return await query("Mobile_GetCategoryDeletionInfo", query_text, {"id": category_id})
 
 
-@tool
+@read_tool()
 async def get_category_groups(include_categories: bool = False) -> dict:
     """Get category groups, optionally with their child categories.
 
@@ -107,7 +107,7 @@ async def get_category_groups(include_categories: bool = False) -> dict:
     return await query("GetCategoryGroups", query_text)
 
 
-@tool
+@read_tool()
 async def get_category_group(category_group_id: str, include_disabled_system_categories: bool | None = None) -> dict:
     """Get one category group and its categories.
 
@@ -136,7 +136,7 @@ async def get_category_group(category_group_id: str, include_disabled_system_cat
     )
 
 
-@tool
+@write_tool()
 async def create_category_group(
     name: str,
     group_type: str,
@@ -183,7 +183,7 @@ async def create_category_group(
     return await query("Common_CreateCategoryGroup", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_category_group(
     category_group_id: str,
     name: str | None = None,
@@ -224,7 +224,7 @@ async def update_category_group(
     return await query("Common_UpdateCategoryGroup", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_category_group(category_group_id: str, move_to_group_id: str | None = None) -> dict:
     """Delete a category group and optionally move categories to another group.
 
@@ -248,7 +248,7 @@ async def delete_category_group(category_group_id: str, move_to_group_id: str | 
     )
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_category_group_order(category_group_id: str, order: int) -> dict:
     """Move a category group to a new order position.
 
@@ -267,7 +267,7 @@ async def update_category_group_order(category_group_id: str, order: int) -> dic
     return await query("Web_UpdateCategoryGroupOrder", query_text, {"id": category_group_id, "order": order})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_category_order(category_id: str, category_group_id: str, order: int) -> dict:
     """Move a category within a category group.
 
@@ -291,7 +291,7 @@ async def update_category_order(category_id: str, category_group_id: str, order:
     )
 
 
-@tool
+@write_tool()
 async def create_category(
     name: str,
     group_id: str,
@@ -342,7 +342,7 @@ async def create_category(
     return await query("Mobile_CreateCategoryMutation", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_category(
     category_id: str,
     name: str | None = None,
@@ -396,7 +396,7 @@ async def update_category(
     return await query("Mobile_UpdateCategoryMutation", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_category(category_id: str, move_to_category_id: str | None = None) -> dict:
     """Delete/disable a category and move transactions/rules elsewhere.
 

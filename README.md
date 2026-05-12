@@ -158,8 +158,8 @@ Add to your `~/.claude.json` under `mcpServers`:
 
 ## Code Layout
 
-`server.py` only configures the FastMCP server. Tools are loaded from `tools/`
-with FastMCP's filesystem provider:
+`server.py` only configures the FastMCP v3 server. Tools are loaded from
+`tools/` with FastMCP's filesystem provider:
 
 - `tools/accounts.py`: account and balance tools
 - `tools/transactions.py`: transaction read, create, update, tag, bulk update, and delete tools
@@ -173,6 +173,14 @@ with FastMCP's filesystem provider:
 - `tools/planning.py`: cash flow, budget, recurring, net worth, and investment tools
 - `tools/auth.py`: login tool
 - `tools/client.py`: shared Monarch GraphQL/auth helpers
+- `tools/decorators.py`: FastMCP tool annotations and read/write tags
+
+## FastMCP v3 Notes
+
+- Read-only tools use FastMCP `readOnlyHint` and `idempotentHint` annotations.
+- Mutating tools are tagged as writes; set-style updates are marked idempotent and delete/reset operations are marked destructive.
+- The default transport is stdio, which is the right fit for Claude Desktop/Codex-style local MCP usage. FastMCP HTTP auth providers are intentionally not wired here because stdio inherits security from the local client process.
+- Monarch authentication remains explicit via `MONARCH_TOKEN` or the optional email/password/TOTP refresh flow.
 
 ## Auto-Authentication
 

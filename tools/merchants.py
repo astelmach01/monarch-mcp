@@ -1,9 +1,9 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import query
 
 
-@tool
+@read_tool()
 async def search_merchants(search: str | None = None, limit: int = 25, offset: int = 0) -> dict:
     """Search Monarch merchants.
 
@@ -26,7 +26,7 @@ async def search_merchants(search: str | None = None, limit: int = 25, offset: i
     return await query("GetMerchantsSearchWithLogo", query_text, {"search": search, "limit": limit, "offset": offset})
 
 
-@tool
+@read_tool()
 async def get_merchant(merchant_id: str) -> dict:
     """Get merchant details used by Monarch's edit merchant dialog.
 
@@ -58,7 +58,7 @@ async def get_merchant(merchant_id: str) -> dict:
     return await query("Common_GetEditMerchant", query_text, {"merchantId": merchant_id})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_merchant(merchant_id: str, name: str | None = None, raw_input: dict | None = None) -> dict:
     """Update a merchant.
 
@@ -102,7 +102,7 @@ async def update_merchant(merchant_id: str, name: str | None = None, raw_input: 
     return await query("Common_UpdateMerchant", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_merchant(merchant_id: str, move_to_merchant_id: str | None = None) -> dict:
     """Delete/merge a merchant.
 

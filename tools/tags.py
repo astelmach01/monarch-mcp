@@ -1,4 +1,4 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import query
 
@@ -14,7 +14,7 @@ def tag_fields(transaction_count: str = "") -> str:
     """
 
 
-@tool
+@read_tool()
 async def get_transaction_tags(
     search: str | None = None,
     limit: int | None = None,
@@ -57,7 +57,7 @@ async def get_transaction_tags(
     )
 
 
-@tool
+@read_tool()
 async def search_transaction_tags(search: str, limit: int = 20) -> dict:
     """Search household transaction tags by name.
 
@@ -68,7 +68,7 @@ async def search_transaction_tags(search: str, limit: int = 20) -> dict:
     return await get_transaction_tags(search=search, limit=limit)
 
 
-@tool
+@write_tool()
 async def create_transaction_tag(name: str, color: str) -> dict:
     """Create a transaction tag.
 
@@ -108,7 +108,7 @@ async def _get_transaction_tag_by_id(tag_id: str) -> dict:
     raise ValueError(f"Tag not found: {tag_id}")
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_transaction_tag(
     tag_id: str,
     name: str | None = None,
@@ -151,7 +151,7 @@ async def update_transaction_tag(
     )
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_transaction_tag(tag_id: str) -> dict:
     """Delete a household transaction tag.
 
@@ -178,7 +178,7 @@ async def delete_transaction_tag(tag_id: str) -> dict:
     )
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_transaction_tag_order(tag_id: str, order: int) -> dict:
     """Move a transaction tag to a new order position.
 

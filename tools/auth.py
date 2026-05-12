@@ -1,11 +1,11 @@
 import os
 
-from fastmcp.tools import tool
+from tools.decorators import write_tool
 
 from tools.client import login_with_stored_credentials, write_env_values
 
 
-@tool
+@write_tool()
 async def login(email: str, password: str) -> dict:
     """Login to Monarch Money, save credentials, and refresh the auth token.
 

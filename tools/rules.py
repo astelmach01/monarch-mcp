@@ -1,4 +1,4 @@
-from fastmcp.tools import tool
+from tools.decorators import read_tool, write_tool
 
 from tools.client import query
 
@@ -73,7 +73,7 @@ def _rule_fields() -> str:
     """
 
 
-@tool
+@read_tool()
 async def get_transaction_rules() -> dict:
     """List transaction rules."""
     query_text = f"""
@@ -86,7 +86,7 @@ async def get_transaction_rules() -> dict:
     return await query("GetTransactionRules", query_text)
 
 
-@tool
+@read_tool()
 async def preview_transaction_rule(rule: dict, offset: int = 0) -> dict:
     """Preview which transactions a rule would change.
 
@@ -121,7 +121,7 @@ async def preview_transaction_rule(rule: dict, offset: int = 0) -> dict:
     return await query("Common_PreviewTransactionRule", query_text, {"rule": rule, "offset": offset})
 
 
-@tool
+@write_tool()
 async def create_transaction_rule(rule_input: dict) -> dict:
     """Create a transaction rule.
 
@@ -140,7 +140,7 @@ async def create_transaction_rule(rule_input: dict) -> dict:
     return await query("Common_CreateTransactionRuleMutationV2", query_text, {"input": rule_input})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_transaction_rule(rule_id: str, rule_input: dict) -> dict:
     """Update a transaction rule.
 
@@ -161,7 +161,7 @@ async def update_transaction_rule(rule_id: str, rule_input: dict) -> dict:
     return await query("Common_UpdateTransactionRuleMutationV2", query_text, {"input": input_data})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_transaction_rule(rule_id: str) -> dict:
     """Delete a transaction rule.
 
@@ -185,7 +185,7 @@ async def delete_transaction_rule(rule_id: str) -> dict:
     return await query("Common_DeleteTransactionRule", query_text, {"id": rule_id})
 
 
-@tool
+@write_tool(idempotent=True)
 async def update_transaction_rule_order(rule_id: str, order: int) -> dict:
     """Move a transaction rule to a new order position.
 
@@ -204,7 +204,7 @@ async def update_transaction_rule_order(rule_id: str, order: int) -> dict:
     return await query("Web_UpdateRuleOrderMutation", query_text, {"id": rule_id, "order": order})
 
 
-@tool
+@write_tool(destructive=True)
 async def delete_all_transaction_rules() -> dict:
     """Delete all transaction rules. This is destructive."""
     query_text = """
