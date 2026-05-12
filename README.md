@@ -6,6 +6,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to [Monarch M
 
 - **Accounts**: View all financial accounts, balances, and connection status
 - **Transactions**: Search and filter transactions by date, category, account, or keyword
+- **Transaction CRUD**: View, create, update, bulk-update, mark reviewed, and delete transactions
 - **Cash Flow**: Monthly income/expense breakdown with savings rate
 - **Budgets**: Budget tracking with actual vs planned spending
 - **Recurring**: Track bills and recurring transactions
@@ -56,6 +57,13 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `get_accounts` | All accounts with balances and status |
 | `get_account_balances_summary` | Quick net worth overview |
 | `get_transactions` | Search/filter transactions |
+| `get_transaction` | Details for one transaction |
+| `update_transaction` | Update category, merchant, notes, date, amount, review status, tags, etc. |
+| `mark_transaction_reviewed` | Mark a transaction reviewed or needs-review |
+| `create_transaction` | Create a manual transaction |
+| `set_transaction_tags` | Replace tags on one transaction |
+| `delete_transaction` | Delete one transaction |
+| `bulk_update_transactions` | Update a set of transactions |
 | `get_cash_flow` | Monthly income/expense breakdown |
 | `get_budgets` | Budget vs actual spending |
 | `get_recurring` | Bills and recurring charges |
