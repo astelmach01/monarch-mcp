@@ -1,8 +1,69 @@
-from datetime import date
+from datetime import date, timedelta
 
 from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, month_range, query
+from tools.output import ensure_context_safe_response, page_items, save_json_response
+
+
+def _date_range_for_timeframe(timeframe: str) -> tuple[str, str]:
+    today = date.today()
+    normalized = timeframe.upper()
+    days = {
+        "1M": 30,
+        "3M": 90,
+        "6M": 182,
+        "1Y": 365,
+        "ALL": 3650,
+    }.get(normalized, 30)
+    return (today - timedelta(days=days)).isoformat(), today.isoformat()
+
+
+def _net_worth_timeframe(timeframe: str) -> str:
+    normalized = timeframe.upper()
+    if normalized in {"1Y", "ALL"}:
+        return "quarter" if normalized == "1Y" else "year"
+    return "month"
+
+
+def _holding_summary(edge: dict) -> dict:
+    node = edge.get("node") or edge
+    security = node.get("security") or {}
+    holdings = node.get("holdings") or []
+    accounts = []
+    for holding in holdings:
+        account = holding.get("account") or {}
+        accounts.append(
+            {
+                "id": account.get("id"),
+                "displayName": account.get("displayName"),
+                "type": (account.get("type") or {}).get("display"),
+                "subtype": (account.get("subtype") or {}).get("display"),
+                "value": holding.get("value"),
+                "quantity": holding.get("quantity"),
+                "costBasis": holding.get("costBasis"),
+            }
+        )
+    return {
+        "id": node.get("id"),
+        "quantity": node.get("quantity"),
+        "costBasis": node.get("costBasis"),
+        "totalValue": node.get("totalValue"),
+        "securityPriceChangeDollars": node.get("securityPriceChangeDollars"),
+        "securityPriceChangePercent": node.get("securityPriceChangePercent"),
+        "lastSyncedAt": node.get("lastSyncedAt"),
+        "security": {
+            "id": security.get("id"),
+            "name": security.get("name"),
+            "ticker": security.get("ticker"),
+            "currentPrice": security.get("currentPrice"),
+            "type": security.get("type"),
+            "typeDisplay": security.get("typeDisplay"),
+            "categoryGroup": security.get("categoryGroup"),
+        },
+        "holdingCount": len(holdings),
+        "accounts": accounts,
+    }
 
 
 @read_tool()
@@ -462,35 +523,178 @@ async def get_net_worth_snapshots(timeframe: str = "1M") -> dict:
     Args:
         timeframe: One of 1M, 3M, 6M, 1Y, ALL.
     """
+    start_date, _ = _date_range_for_timeframe(timeframe)
+    monarch_timeframe = _net_worth_timeframe(timeframe)
     query_text = """
-    query GetNetWorthSnapshots($timeframe: String!) {
-      accountChartData(chartType: "performance", dateRange: $timeframe) {
-        date
+    query Common_GetSnapshotsByAccountType($startDate: Date!, $timeframe: Timeframe!, $filters: AccountFilters) {
+      snapshotsByAccountType(startDate: $startDate, timeframe: $timeframe, filters: $filters) {
+        accountType
+        month
         balance
+      }
+      accountTypes {
+        name
+        group
       }
     }
     """
-    return await query("GetNetWorthSnapshots", query_text, {"timeframe": timeframe})
+    result = await query(
+        "Common_GetSnapshotsByAccountType",
+        query_text,
+        {"startDate": start_date, "timeframe": monarch_timeframe, "filters": {}},
+    )
+    result["requestedTimeframe"] = timeframe
+    result["startDate"] = start_date
+    result["monarchTimeframe"] = monarch_timeframe
+    return result
 
 
 @read_tool()
-async def get_investments() -> dict:
-    """Get investment holdings and performance."""
+async def get_investments(
+    timeframe: str = "3M",
+    limit: int = 25,
+    offset: int = 0,
+    include_details: bool = False,
+    save_full_response: bool = False,
+) -> dict:
+    """Get investment holdings and portfolio performance.
+
+    Args:
+        timeframe: One of 1M, 3M, 6M, 1Y, ALL. Defaults to 3M.
+        limit: Max aggregate holdings to return. Clamped to 100.
+        offset: Pagination offset.
+        include_details: Return full Monarch holding objects for the page.
+        save_full_response: Save the full raw Monarch response to a JSON file.
+    """
+    start_date, end_date = _date_range_for_timeframe(timeframe)
     query_text = """
-    query GetInvestments {
-      portfolioPerformance {
-        totalValue
-        totalCostBasis
-        totalGainLoss
-        totalGainLossPercent
-        todayChangeAmount
-        todayChangePercent
-      }
-      holdings {
-        id name ticker quantity costBasis currentValue
-        todayChangeAmount todayChangePercent
-        account { displayName }
+    query Web_GetPortfolio($portfolioInput: PortfolioInput) {
+      portfolio(input: $portfolioInput) {
+        performance {
+          totalValue
+          totalChangePercent
+          totalChangeDollars
+          oneDayChangePercent
+          historicalChart {
+            date
+            returnPercent
+            __typename
+          }
+          benchmarks {
+            security {
+              id
+              ticker
+              name
+              oneDayChangePercent
+              __typename
+            }
+            historicalChart {
+              date
+              returnPercent
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        aggregateHoldings {
+          edges {
+            node {
+              id
+              quantity
+              costBasis
+              totalValue
+              securityPriceChangeDollars
+              securityPriceChangePercent
+              lastSyncedAt
+              holdings {
+                id
+                type
+                typeDisplay
+                name
+                ticker
+                closingPrice
+                closingPriceUpdatedAt
+                quantity
+                value
+                costBasis
+                userCostBasis
+                account {
+                  id
+                  mask
+                  icon
+                  logoUrl
+                  institution { id name __typename }
+                  type { name display __typename }
+                  subtype { name display __typename }
+                  displayName
+                  order
+                  currentBalance
+                  __typename
+                }
+                taxLots {
+                  id
+                  createdAt
+                  acquisitionDate
+                  acquisitionQuantity
+                  costBasisPerUnit
+                  __typename
+                }
+                __typename
+              }
+              security {
+                id
+                name
+                ticker
+                currentPrice
+                currentPriceUpdatedAt
+                closingPrice
+                type
+                typeDisplay
+                categoryGroup
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
       }
     }
     """
-    return await query("GetInvestments", query_text)
+    raw = await query(
+        "Web_GetPortfolio",
+        query_text,
+        {"portfolioInput": {"startDate": start_date, "endDate": end_date}},
+    )
+    portfolio = (raw.get("data") or {}).get("portfolio") or {}
+    performance = portfolio.get("performance") or {}
+    edges = ((portfolio.get("aggregateHoldings") or {}).get("edges")) or []
+    paged_edges, page = page_items(edges, limit=limit, offset=offset)
+
+    performance_summary = {
+        "totalValue": performance.get("totalValue"),
+        "totalChangePercent": performance.get("totalChangePercent"),
+        "totalChangeDollars": performance.get("totalChangeDollars"),
+        "oneDayChangePercent": performance.get("oneDayChangePercent"),
+        "historicalChart": performance.get("historicalChart") or [],
+        "benchmarkCount": len(performance.get("benchmarks") or []),
+    }
+    compact_result = {
+        "timeframe": timeframe,
+        "startDate": start_date,
+        "endDate": end_date,
+        "performance": performance_summary,
+        "aggregateHoldings": [_holding_summary(edge) for edge in paged_edges],
+        "page": page,
+        "compact": True,
+    }
+    result = dict(compact_result)
+    if include_details:
+        result["aggregateHoldings"] = paged_edges
+        result["compact"] = False
+    if save_full_response:
+        result["full_response_path"] = save_json_response(raw, prefix="monarch-get-investments")
+    return ensure_context_safe_response(result, fallback=compact_result, prefix="monarch-get-investments")

@@ -21,6 +21,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to [Monarch M
 - **Net Worth**: Historical net worth snapshots
 - **Investments**: Portfolio holdings and performance
 - **Auto-auth**: Automatic token refresh with optional MFA/TOTP support
+- **Context-safe output**: Broad list/detail tools paginate and can save full raw responses to local JSON files instead of returning oversized MCP payloads
 
 ## Setup
 
@@ -123,8 +124,8 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `move_money_between_budget_categories` | Move budget money between categories |
 | `reset_budget` | Recalculate/reset budget data |
 | `reset_budget_rollover` | Reset a budget rollover |
-| `list_goals` | List legacy/goals-v2 goals |
-| `list_savings_goals` | List savings goals |
+| `list_goals` | Paginated legacy/goals-v2 goals; compact by default, optional full-response file |
+| `list_savings_goals` | Paginated savings goals; compact by default, optional full-response file |
 | `get_goal_detail` | Get one goals-v2 goal |
 | `get_savings_goal` | Get one savings goal |
 | `get_goal_options` | Get built-in goal creation options |
@@ -152,7 +153,7 @@ Add to your `~/.claude.json` under `mcpServers`:
 | `mark_stream_not_recurring` | Mark a stream as not recurring |
 | `trigger_recurring_merchant_search` | Trigger Monarch's recurring merchant scan |
 | `get_net_worth_snapshots` | Historical net worth data |
-| `get_investments` | Portfolio holdings and performance |
+| `get_investments` | Paginated portfolio holdings and performance |
 | `get_account_history` | Balance history for one account |
 | `login` | Authenticate and save credentials |
 
@@ -181,6 +182,7 @@ Add to your `~/.claude.json` under `mcpServers`:
 - Mutating tools are tagged as writes; set-style updates are marked idempotent and delete/reset operations are marked destructive.
 - The default transport is stdio, which is the right fit for Claude Desktop/Codex-style local MCP usage. FastMCP HTTP auth providers are intentionally not wired here because stdio inherits security from the local client process.
 - Monarch authentication remains explicit via `MONARCH_TOKEN` or the optional email/password/TOTP refresh flow.
+- Tools that can produce large payloads expose `limit`, `offset`, `include_details`, and/or `save_full_response`; oversized detail responses are written under `MONARCH_MCP_OUTPUT_DIR` or the system temp directory and a path is returned.
 
 ## Auto-Authentication
 

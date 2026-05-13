@@ -1,6 +1,7 @@
 from tools.decorators import read_tool, write_tool
 
 from tools.client import drop_none, query
+from tools.output import ensure_context_safe_response, page_items, save_json_response
 
 
 def _payload_error_fields() -> str:
@@ -112,9 +113,91 @@ def _savings_goal_fields() -> str:
     """
 
 
+def _account_summary(account: dict | None) -> dict | None:
+    if not account:
+        return None
+    return {
+        "id": account.get("id"),
+        "displayName": account.get("displayName"),
+        "displayBalance": account.get("displayBalance"),
+        "type": (account.get("type") or {}).get("display"),
+        "subtype": (account.get("subtype") or {}).get("display"),
+    }
+
+
+def _goal_summary(goal: dict) -> dict:
+    allocations = goal.get("accountAllocations") or []
+    return {
+        "id": goal.get("id"),
+        "name": goal.get("name"),
+        "type": goal.get("type"),
+        "objective": goal.get("objective"),
+        "archivedAt": goal.get("archivedAt"),
+        "completedAt": goal.get("completedAt"),
+        "targetAmount": goal.get("targetAmount"),
+        "startingAmount": goal.get("startingAmount"),
+        "currentAmount": goal.get("currentAmount"),
+        "completionPercent": goal.get("completionPercent"),
+        "estimatedCompletionMonth": goal.get("estimatedCompletionMonth"),
+        "plannedMonthlyContribution": goal.get("plannedMonthlyContribution"),
+        "priority": goal.get("priority"),
+        "accountAllocationCount": len(allocations),
+        "accountAllocations": [
+            {
+                "id": allocation.get("id"),
+                "amount": allocation.get("amount"),
+                "currentAmount": allocation.get("currentAmount"),
+                "useEntireAccountBalance": allocation.get("useEntireAccountBalance"),
+                "account": _account_summary(allocation.get("account")),
+            }
+            for allocation in allocations
+        ],
+        "eligibleAccountCount": len(goal.get("eligibleAccounts") or []),
+        "suggestedAccountCount": len(goal.get("suggestedAccounts") or []),
+    }
+
+
+def _savings_goal_summary(goal: dict) -> dict:
+    return {
+        "id": goal.get("id"),
+        "type": goal.get("type"),
+        "name": goal.get("name"),
+        "status": goal.get("status"),
+        "archivedAt": goal.get("archivedAt"),
+        "progress": goal.get("progress"),
+        "currentBalance": goal.get("currentBalance"),
+        "targetDate": goal.get("targetDate"),
+        "targetAmount": goal.get("targetAmount"),
+        "plannedMonthlyContribution": goal.get("plannedMonthlyContribution"),
+        "spendingTotal": goal.get("spendingTotal"),
+        "netContribution": goal.get("netContribution"),
+        "balanceThisMonth": goal.get("balanceThisMonth"),
+        "estimatedMonthsUntilCompletion": goal.get("estimatedMonthsUntilCompletion"),
+        "forecastedCompletionDate": goal.get("forecastedCompletionDate"),
+        "isSinkingFund": goal.get("isSinkingFund"),
+        "priority": goal.get("priority"),
+        "allocationAccountCount": len(goal.get("allocationAmountsByAccount") or []),
+    }
+
+
 @read_tool()
-async def list_goals() -> dict:
-    """List Monarch goals and accounts with unallocated goal balances."""
+async def list_goals(
+    limit: int = 25,
+    offset: int = 0,
+    include_details: bool = False,
+    include_unallocated_accounts: bool = False,
+    save_full_response: bool = False,
+) -> dict:
+    """List Monarch goals with pagination and compact output by default.
+
+    Args:
+        limit: Max goals to return. Clamped to 100.
+        offset: Pagination offset.
+        include_details: Return full Monarch goal objects for the page.
+        include_unallocated_accounts: Include accounts with unallocated balances.
+        save_full_response: Save the full raw Monarch response to a JSON file and
+            return its path instead of putting all data in the tool response.
+    """
     query_text = f"""
     query Web_GoalsV2 {{
       goalsV2 {{
@@ -125,12 +208,47 @@ async def list_goals() -> dict:
       }}
     }}
     """
-    return await query("Web_GoalsV2", query_text)
+    raw = await query("Web_GoalsV2", query_text)
+    data = raw.get("data") or {}
+    goals = data.get("goalsV2") or []
+    paged_goals, page = page_items(goals, limit=limit, offset=offset)
+
+    compact_result: dict = {
+        "goals": [_goal_summary(goal) for goal in paged_goals],
+        "page": page,
+        "compact": True,
+        "detail_tool": "get_goal_detail",
+    }
+    result = dict(compact_result)
+    if include_details:
+        result["goals"] = paged_goals
+        result["compact"] = False
+    if include_unallocated_accounts:
+        result["accountsWithUnallocatedBalancesForGoals"] = data.get("accountsWithUnallocatedBalancesForGoals") or []
+        compact_result["accountsWithUnallocatedBalancesForGoals"] = [
+            _account_summary(account) for account in data.get("accountsWithUnallocatedBalancesForGoals") or []
+        ]
+    if save_full_response:
+        result["full_response_path"] = save_json_response(raw, prefix="monarch-list-goals")
+    return ensure_context_safe_response(result, fallback=compact_result, prefix="monarch-list-goals")
 
 
 @read_tool()
-async def list_savings_goals() -> dict:
-    """List Monarch's current savings goals experience goals."""
+async def list_savings_goals(
+    limit: int = 25,
+    offset: int = 0,
+    include_details: bool = False,
+    save_full_response: bool = False,
+) -> dict:
+    """List savings goals with pagination and compact output by default.
+
+    Args:
+        limit: Max goals to return. Clamped to 100.
+        offset: Pagination offset.
+        include_details: Return full Monarch savings goal objects for the page.
+        save_full_response: Save the full raw Monarch response to a JSON file and
+            return its path instead of putting all data in the tool response.
+    """
     query_text = f"""
     query Common_SavingsGoals {{
       savingsGoals {{
@@ -138,7 +256,22 @@ async def list_savings_goals() -> dict:
       }}
     }}
     """
-    return await query("Common_SavingsGoals", query_text)
+    raw = await query("Common_SavingsGoals", query_text)
+    goals = (raw.get("data") or {}).get("savingsGoals") or []
+    paged_goals, page = page_items(goals, limit=limit, offset=offset)
+    compact_result = {
+        "savingsGoals": [_savings_goal_summary(goal) for goal in paged_goals],
+        "page": page,
+        "compact": True,
+        "detail_tool": "get_savings_goal",
+    }
+    result = dict(compact_result)
+    if include_details:
+        result["savingsGoals"] = paged_goals
+        result["compact"] = False
+    if save_full_response:
+        result["full_response_path"] = save_json_response(raw, prefix="monarch-list-savings-goals")
+    return ensure_context_safe_response(result, fallback=compact_result, prefix="monarch-list-savings-goals")
 
 
 @read_tool()
