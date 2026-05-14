@@ -5,6 +5,23 @@ from tools.decorators import read_tool, write_tool
 from tools.client import drop_none, query, transaction_mutation_fields
 
 
+async def _uncategorized_category_id() -> str:
+    query_text = """
+    query Common_GetTransactionCreateDefaultCategory {
+      categories {
+        id
+        systemCategory
+        __typename
+      }
+    }
+    """
+    data = await query("Common_GetTransactionCreateDefaultCategory", query_text)
+    for category in (data.get("data") or {}).get("categories") or []:
+        if category.get("systemCategory") == "uncategorized":
+            return category["id"]
+    raise RuntimeError("Could not find Monarch uncategorized category")
+
+
 @read_tool()
 async def get_transactions(
     start_date: str | None = None,
@@ -363,6 +380,9 @@ async def create_transaction(
         tag_ids: Optional tag IDs.
         raw_input: Extra app-native CreateTransactionMutationInput fields.
     """
+    if category_id is None:
+        category_id = await _uncategorized_category_id()
+
     input_data = drop_none(
         {
             "accountId": account_id,
@@ -371,8 +391,6 @@ async def create_transaction(
             "merchantName": merchant_name,
             "categoryId": category_id,
             "notes": notes,
-            "reviewStatus": review_status,
-            "hideFromReports": hide_from_reports,
             "shouldUpdateBalance": should_update_balance,
         }
     )
@@ -396,8 +414,17 @@ async def create_transaction(
     result = await query("Common_CreateTransactionMutation", query_text, {"input": input_data})
     create_payload = (result.get("data") or {}).get("createTransaction") or {}
     new_transaction_id = (create_payload.get("transaction") or {}).get("id")
+    followups: dict = {}
+    if new_transaction_id and (hide_from_reports is not None or review_status is not None):
+        followups["update"] = await update_transaction(
+            transaction_id=new_transaction_id,
+            hide_from_reports=hide_from_reports,
+            review_status=review_status,
+        )
     if new_transaction_id and tag_ids is not None:
-        result["set_tags"] = await set_transaction_tags(new_transaction_id, tag_ids)
+        followups["set_tags"] = await set_transaction_tags(new_transaction_id, tag_ids)
+    if followups:
+        result.update(followups)
     return result
 
 

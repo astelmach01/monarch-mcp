@@ -1,6 +1,6 @@
 from tools.decorators import read_tool, write_tool
 
-from tools.client import drop_none, query
+from tools.client import drop_none, month_start, query
 from tools.output import ensure_context_safe_response, page_items, save_json_response
 
 
@@ -327,14 +327,37 @@ async def get_goal_options() -> dict:
     return await query("Common_GoalOptions", query_text)
 
 
+def _normalize_savings_goal_input(goal: dict) -> dict:
+    allowed_fields = {
+        "imageStorageProvider",
+        "imageStorageProviderId",
+        "isSinkingFund",
+        "name",
+        "plannedMonthlyContribution",
+        "priority",
+        "targetAmount",
+        "targetDate",
+        "type",
+    }
+    normalized = {key: value for key, value in goal.items() if key in allowed_fields and value is not None}
+    objective = goal.get("objective")
+    if objective and goal.get("type") in {"asset", "debt", "qualitative"}:
+        normalized["type"] = objective
+    if "type" not in normalized and objective:
+        normalized["type"] = objective
+    return normalized
+
+
 @write_tool()
 async def create_savings_goals(goals: list[dict]) -> dict:
-    """Create one or more savings goals using Monarch's app-native goal objects.
+    """Create one or more savings goals.
 
     Args:
-        goals: List of goal dicts such as name/type/imageStorageProvider/
-            imageStorageProviderId from get_goal_options.
+        goals: List of goal dicts. For convenience, callers may pass
+            `objective` from get_goal_options; Monarch's create-savings-goal
+            input expects that value as `type`.
     """
+    normalized_goals = [_normalize_savings_goal_input(goal) for goal in goals]
     query_text = """
     mutation Common_CreateSavingsGoals($input: CreateSavingsGoalsInput!) {
       createSavingsGoals(input: $input) {
@@ -347,7 +370,7 @@ async def create_savings_goals(goals: list[dict]) -> dict:
       }
     }
     """
-    return await query("Common_CreateSavingsGoals", query_text, {"input": {"goals": goals}})
+    return await query("Common_CreateSavingsGoals", query_text, {"input": {"goals": normalized_goals}})
 
 
 @write_tool(idempotent=True)
@@ -807,12 +830,46 @@ async def set_goal_planned_contribution(
 
 
 @write_tool(idempotent=True)
-async def set_savings_goal_budget_amount(raw_input: dict) -> dict:
-    """Set a savings-goal budget amount using Monarch's app-native input.
+async def set_savings_goal_budget_amount(
+    goal_id: str | None = None,
+    month: str | None = None,
+    amount: float | None = None,
+    apply_to_future: bool | None = None,
+    account_id: str | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Set a savings-goal budget amount.
 
     Args:
-        raw_input: SetSavingsGoalBudgetAmountInput.
+        goal_id: Savings goal ID. Sent to Monarch as `savingsGoalId`.
+        month: Month as YYYY-MM or date as YYYY-MM-DD.
+        amount: Planned budget amount.
+        apply_to_future: Whether Monarch should apply this amount to future months.
+        account_id: Optional account-specific contribution target.
+        raw_input: Extra app-native SetSavingsGoalBudgetAmountInput.
     """
+    input_data = dict(raw_input or {})
+    if "goalId" in input_data and "savingsGoalId" not in input_data:
+        input_data["savingsGoalId"] = input_data.pop("goalId")
+    fallback_goal_id = goal_id
+    if goal_id and "savingsGoalId" not in input_data:
+        input_data["savingsGoalId"] = goal_id
+    if "savingsGoalId" in input_data and not fallback_goal_id:
+        fallback_goal_id = input_data["savingsGoalId"]
+    if "date" in input_data and "month" not in input_data:
+        input_data["month"] = input_data.pop("date")
+    if month and "month" not in input_data:
+        input_data["month"] = month
+    if "month" in input_data:
+        input_data["month"] = month_start(str(input_data["month"]))
+    if amount is not None:
+        input_data["amount"] = amount
+    if apply_to_future is not None:
+        input_data["applyToFuture"] = apply_to_future
+    if account_id is not None:
+        input_data["accountId"] = account_id
+    input_data.setdefault("accountId", None)
+
     query_text = f"""
     mutation Common_SetSavingsGoalBudgetAmount($input: SetSavingsGoalBudgetAmountInput!) {{
       setSavingsGoalBudgetAmount(input: $input) {{
@@ -822,4 +879,13 @@ async def set_savings_goal_budget_amount(raw_input: dict) -> dict:
       }}
     }}
     """
-    return await query("Common_SetSavingsGoalBudgetAmount", query_text, {"input": raw_input})
+    result = await query("Common_SetSavingsGoalBudgetAmount", query_text, {"input": input_data})
+    payload = (result.get("data") or {}).get("setSavingsGoalBudgetAmount") or {}
+    error = payload.get("errors") or {}
+    if fallback_goal_id and error.get("message") == "Not found":
+        result["legacy_goal_planned_contribution_fallback"] = await set_goal_planned_contribution(
+            goal_id=fallback_goal_id,
+            amount=input_data["amount"],
+            month=input_data["month"],
+        )
+    return result

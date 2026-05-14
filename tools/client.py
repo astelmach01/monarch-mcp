@@ -22,7 +22,7 @@ def _headers() -> dict:
         "authorization": f"Token {_state['token']}",
         "content-type": "application/json",
         "monarch-client": "monarch-mcp-server",
-        "monarch-client-version": "v1.0.1715",
+        "monarch-client-version": "v1.0.2489",
         "client-platform": "web",
         "origin": "https://app.monarch.com",
     }
@@ -118,6 +118,11 @@ def month_range(month: str | None = None) -> tuple[str, str]:
     year, mo = int(month[:4]), int(month[5:])
     last_day = monthrange(year, mo)[1]
     return f"{month}-01", f"{month}-{last_day}"
+
+
+def month_start(month: str) -> str:
+    """Normalize a YYYY-MM or YYYY-MM-DD value to Monarch's month start date."""
+    return month if len(month) == 10 else f"{month}-01"
 
 
 def drop_none(data: dict) -> dict:

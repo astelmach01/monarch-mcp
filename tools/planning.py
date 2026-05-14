@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from tools.decorators import read_tool, write_tool
 
-from tools.client import drop_none, month_range, query
+from tools.client import drop_none, month_range, month_start, query
 from tools.output import ensure_context_safe_response, page_items, save_json_response
 
 
@@ -359,12 +359,31 @@ async def update_budget_item(
 
 
 @write_tool(idempotent=True)
-async def update_flex_budget_item(raw_input: dict) -> dict:
-    """Update or create a flex-budget item using Monarch's app-native input.
+async def update_flex_budget_item(
+    month: str | None = None,
+    amount: float | None = None,
+    apply_to_future: bool | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Update or create a flex-budget item.
 
     Args:
-        raw_input: UpdateOrCreateFlexBudgetItemMutationInput.
+        month: Month as YYYY-MM or date as YYYY-MM-DD. Sent to Monarch as
+            `startDate`.
+        amount: Flexible budget amount.
+        apply_to_future: Whether Monarch should apply this amount to future months.
+        raw_input: Extra app-native UpdateOrCreateFlexBudgetItemMutationInput.
     """
+    input_data = dict(raw_input or {})
+    if "month" in input_data and "startDate" not in input_data:
+        input_data["startDate"] = month_start(str(input_data.pop("month")))
+    if month and "startDate" not in input_data:
+        input_data["startDate"] = month_start(month)
+    if amount is not None:
+        input_data["amount"] = amount
+    if apply_to_future is not None:
+        input_data["applyToFuture"] = apply_to_future
+
     query_text = """
     mutation Common_UpdateFlexBudgetMutation($input: UpdateOrCreateFlexBudgetItemMutationInput!) {
       updateOrCreateFlexBudgetItem(input: $input) {
@@ -377,16 +396,56 @@ async def update_flex_budget_item(raw_input: dict) -> dict:
       }
     }
     """
-    return await query("Common_UpdateFlexBudgetMutation", query_text, {"input": raw_input})
+    return await query("Common_UpdateFlexBudgetMutation", query_text, {"input": input_data})
 
 
 @write_tool()
-async def move_money_between_budget_categories(raw_input: dict) -> dict:
-    """Move budget money between categories using Monarch's app-native input.
+async def move_money_between_budget_categories(
+    amount: float | None = None,
+    month: str | None = None,
+    from_category_id: str | None = None,
+    to_category_id: str | None = None,
+    from_category_group_id: str | None = None,
+    to_category_group_id: str | None = None,
+    from_budget_target: str | None = None,
+    to_budget_target: str | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Move budget money between categories or budget targets.
 
     Args:
-        raw_input: MoveMoneyMutationInput.
+        amount: Amount to move.
+        month: Month as YYYY-MM or date as YYYY-MM-DD. Sent to Monarch as
+            `startDate`.
+        from_category_id: Source category ID.
+        to_category_id: Destination category ID.
+        from_category_group_id: Source category group ID.
+        to_category_group_id: Destination category group ID.
+        from_budget_target: Source aggregate budget target.
+        to_budget_target: Destination aggregate budget target.
+        raw_input: Extra app-native MoveMoneyMutationInput.
     """
+    input_data = dict(raw_input or {})
+    if "month" in input_data and "startDate" not in input_data:
+        input_data["startDate"] = month_start(str(input_data.pop("month")))
+    if month and "startDate" not in input_data:
+        input_data["startDate"] = month_start(month)
+    if amount is not None:
+        input_data["amount"] = amount
+    input_data.update(
+        drop_none(
+            {
+                "fromCategoryId": from_category_id,
+                "toCategoryId": to_category_id,
+                "fromCategoryGroupId": from_category_group_id,
+                "toCategoryGroupId": to_category_group_id,
+                "fromBudgetTarget": from_budget_target,
+                "toBudgetTarget": to_budget_target,
+            }
+        )
+    )
+    input_data.setdefault("timeframe", "month")
+
     query_text = """
     mutation Web_MoveMoneyMutation($input: MoveMoneyMutationInput!) {
       moveMoneyBetweenCategories(input: $input) {
@@ -396,16 +455,45 @@ async def move_money_between_budget_categories(raw_input: dict) -> dict:
       }
     }
     """
-    return await query("Web_MoveMoneyMutation", query_text, {"input": raw_input})
+    return await query("Web_MoveMoneyMutation", query_text, {"input": input_data})
 
 
 @write_tool(destructive=True)
-async def reset_budget(raw_input: dict) -> dict:
-    """Recalculate/reset budget data using Monarch's app-native input.
+async def reset_budget(
+    month: str | None = None,
+    category_type: str | None = None,
+    budget_variability: str | None = None,
+    category_ids: list[str] | None = None,
+    overwrite_existing: bool | None = False,
+    raw_input: dict | None = None,
+) -> dict:
+    """Recalculate/reset budget data.
 
     Args:
-        raw_input: ResetBudgetMutationInput.
+        month: Month as YYYY-MM or date as YYYY-MM-DD. Sent to Monarch as
+            `startDate`.
+        category_type: Optional category type, usually `income` or `expense`.
+        budget_variability: Optional budget variability such as `fixed`.
+        category_ids: Optional category IDs to recalculate.
+        overwrite_existing: Whether to overwrite existing budget rows.
+        raw_input: Extra app-native ResetBudgetMutationInput.
     """
+    input_data = dict(raw_input or {})
+    if "month" in input_data and "startDate" not in input_data:
+        input_data["startDate"] = month_start(str(input_data.pop("month")))
+    if month and "startDate" not in input_data:
+        input_data["startDate"] = month_start(month)
+    if overwrite_existing is not None:
+        input_data.setdefault("overwriteExisting", overwrite_existing)
+    if any(value is not None for value in (category_type, budget_variability, category_ids)):
+        input_data["filters"] = drop_none(
+            {
+                "categoryType": category_type,
+                "budgetVariability": budget_variability,
+                "categoryIds": category_ids,
+            }
+        )
+
     query_text = """
     mutation Web_RecalculateBudgetMutation($input: ResetBudgetMutationInput!) {
       resetBudget(input: $input) {
@@ -419,16 +507,107 @@ async def reset_budget(raw_input: dict) -> dict:
       }
     }
     """
-    return await query("Web_RecalculateBudgetMutation", query_text, {"input": raw_input})
+    return await query("Web_RecalculateBudgetMutation", query_text, {"input": input_data})
 
 
 @write_tool(destructive=True)
-async def reset_budget_rollover(raw_input: dict) -> dict:
-    """Reset a budget rollover using Monarch's app-native input.
+async def reset_budget_rollover(
+    category_id: str | None = None,
+    category_group_id: str | None = None,
+    month: str | None = None,
+    starting_balance: float | None = None,
+    raw_input: dict | None = None,
+) -> dict:
+    """Reset a budget rollover.
 
     Args:
-        raw_input: ResetBudgetRolloverInput.
+        category_id: Category ID whose rollover should be reset.
+        category_group_id: Category group ID whose rollover should be reset.
+        month: Month as YYYY-MM or date as YYYY-MM-DD. Sent to Monarch as
+            `startMonth`.
+        starting_balance: Optional rollover starting balance.
+        raw_input: Extra app-native ResetBudgetRolloverInput.
     """
+    input_data = dict(raw_input or {})
+    if "month" in input_data and "startMonth" not in input_data:
+        input_data["startMonth"] = month_start(str(input_data.pop("month")))
+    if "startDate" in input_data and "startMonth" not in input_data:
+        input_data["startMonth"] = month_start(str(input_data.pop("startDate")))
+    if month and "startMonth" not in input_data:
+        input_data["startMonth"] = month_start(month)
+    input_data.update(
+        drop_none(
+            {
+                "categoryId": category_id,
+                "categoryGroupId": category_group_id,
+                "startingBalance": starting_balance,
+            }
+        )
+    )
+    input_data.pop("timeframe", None)
+
+    if input_data.get("categoryId"):
+        preflight_query = """
+        query Common_CategoryRolloverPreflight($id: UUID!) {
+          category(id: $id) {
+            id
+            name
+            rolloverPeriod { id __typename }
+            __typename
+          }
+        }
+        """
+        preflight = await query(
+            "Common_CategoryRolloverPreflight",
+            preflight_query,
+            {"id": input_data["categoryId"]},
+        )
+        category = preflight.get("data", {}).get("category")
+        if category and not category.get("rolloverPeriod"):
+            return {
+                "skipped": True,
+                "reason": "category_has_no_rollover_period",
+                "category": {"id": category.get("id"), "name": category.get("name")},
+                "input": input_data,
+            }
+    elif input_data.get("categoryGroupId"):
+        preflight_query = """
+        query Common_CategoryGroupRolloverPreflight($id: UUID!) {
+          categoryGroup(id: $id) {
+            id
+            name
+            rolloverPeriod { id __typename }
+            __typename
+          }
+        }
+        """
+        preflight = await query(
+            "Common_CategoryGroupRolloverPreflight",
+            preflight_query,
+            {"id": input_data["categoryGroupId"]},
+        )
+        category_group = preflight.get("data", {}).get("categoryGroup")
+        if category_group and not category_group.get("rolloverPeriod"):
+            return {
+                "skipped": True,
+                "reason": "category_group_has_no_rollover_period",
+                "categoryGroup": {"id": category_group.get("id"), "name": category_group.get("name")},
+                "input": input_data,
+            }
+    else:
+        preflight_query = """
+        query Common_FlexRolloverPreflight {
+          flexExpenseRolloverPeriod { id __typename }
+        }
+        """
+        preflight = await query("Common_FlexRolloverPreflight", preflight_query)
+        if not preflight.get("data", {}).get("flexExpenseRolloverPeriod"):
+            return {
+                "skipped": True,
+                "reason": "flex_budget_has_no_rollover_period",
+                "input": input_data,
+            }
+
     query_text = """
     mutation Web_ResetRolloverMutation($input: ResetBudgetRolloverInput!) {
       resetBudgetRollover(input: $input) {
@@ -442,7 +621,7 @@ async def reset_budget_rollover(raw_input: dict) -> dict:
       }
     }
     """
-    return await query("Web_ResetRolloverMutation", query_text, {"input": raw_input})
+    return await query("Web_ResetRolloverMutation", query_text, {"input": input_data})
 
 
 @read_tool()
